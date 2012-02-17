@@ -1,5 +1,7 @@
 package hudson.plugins.s3;
 
+import java.io.Serializable;
+
 
 /**
  * Provides a way to construct a destination bucket name and object name based
@@ -10,7 +12,11 @@ package hudson.plugins.s3;
  * of "mybucket/v1" will cause the object "v1/file.txt" to be created in the mybucket.
  * 
  */
-public class Destination {
+public class Destination implements Serializable {
+  /**
+   * 
+   */
+  private static final long serialVersionUID = 1L;
   public final String bucketName; 
   public final String objectName; 
   
