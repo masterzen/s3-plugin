@@ -8,6 +8,7 @@ import hudson.remoting.VirtualChannel;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -74,7 +75,7 @@ public class S3Profile {
     
     
    
-    public void upload(AbstractBuild<?,?> build, final BuildListener listener, String bucketName, FilePath filePath) throws IOException, InterruptedException {
+    public void upload(AbstractBuild<?,?> build, final BuildListener listener, String bucketName, FilePath filePath, boolean uploadFromSlave) throws IOException, InterruptedException {
         if (filePath.isDirectory()) {
             throw new IOException(filePath + " is a directory");
         }
@@ -83,7 +84,12 @@ public class S3Profile {
         int buildID = build.getNumber();
         Destination dest = new Destination(bucketName,"jobs/" + buildName + "/" + buildID + "/" + filePath.getName());
         try {
-          filePath.act(new S3UploadCallable(name, accessKey, secretKey, dest));
+          S3UploadCallable callable = new S3UploadCallable(accessKey, secretKey, dest);
+          if (uploadFromSlave) {
+            filePath.act(callable);
+          } else {
+            callable.invoke(filePath);
+          }
         } catch (Exception e) {
             listener.getLogger().println("error: " + e.getMessage());
             e.printStackTrace(listener.getLogger());
@@ -93,24 +99,42 @@ public class S3Profile {
     
     public static class S3UploadCallable implements FileCallable<Void> 
     {
-      private String name, accessKey, secretKey;
+      private static final long serialVersionUID = 1L;
+      private String accessKey, secretKey;
       private Destination dest;
       
-      public S3UploadCallable(String name, String accessKey, String secretKey, Destination dest)
+      public S3UploadCallable(String accessKey, String secretKey, Destination dest)
       {
-        this.name = name;
         this.accessKey = accessKey;
         this.secretKey = secretKey;
         this.dest = dest;
       }
       
+      /**
+       * Remote on slave variant
+       */
       public Void invoke(File file, VirtualChannel channel) throws IOException, InterruptedException
       {
-        AmazonS3Client client = new AmazonS3Client(new BasicAWSCredentials(accessKey, secretKey));
-        client.putObject(dest.bucketName, dest.objectName, file);
+        getClient().putObject(dest.bucketName, dest.objectName, file);
         return null;
       }
       
+      /**
+       * Stream from slave, upload on master variant
+       */
+      public Void invoke(FilePath file) throws IOException, InterruptedException
+      {
+        ObjectMetadata md = new ObjectMetadata();
+        md.setContentLength(file.length());
+        md.setLastModified(new Date(file.lastModified()));
+        getClient().putObject(dest.bucketName, dest.objectName, file.read(), md);
+        return null;
+      }
+
+      private AmazonS3Client getClient()
+      {
+        return new AmazonS3Client(new BasicAWSCredentials(accessKey, secretKey));
+      }
     }
     
 }

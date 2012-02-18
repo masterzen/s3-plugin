@@ -101,8 +101,6 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
         try {
             Map<String, String> envVars = build.getEnvironment(listener);
 
-            //build.getWorkspace().
-            
             for (Entry entry : entries) {
                 String expanded = Util.replaceMacro(entry.sourceFile, envVars);
                 FilePath ws = build.getWorkspace();
@@ -117,8 +115,8 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
                 }
                 String bucket = Util.replaceMacro(entry.bucket, envVars);
                 for (FilePath src : paths) {
-                    log(listener.getLogger(), "bucket=" + bucket + ", file=" + src.getName());
-                    profile.upload(build, listener, bucket, src);
+                    log(listener.getLogger(), "bucket=" + bucket + ", file=" + src.getName() + ", upload from slave=" + entry.uploadFromSlave);
+                    profile.upload(build, listener, bucket, src, entry.uploadFromSlave);
                 }
             }
         } catch (IOException e) {
