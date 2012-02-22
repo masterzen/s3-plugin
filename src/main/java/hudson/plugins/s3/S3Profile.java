@@ -152,4 +152,141 @@ public class S3Profile {
       }
     }
     
+    public void download(Run build, String name, FilePath target) throws IOException, InterruptedException 
+    {
+      String buildName = build.getDisplayName();
+      int buildID = build.getNumber();
+      Destination dest = new Destination(name,"jobs/" + buildName + "/" + buildID + "/" + name);
+      target.act(new S3DownloadCallable(accessKey, secretKey, dest));
+    }
+
+    public static class S3DownloadCallable implements FileCallable<FingerprintRecord> 
+    {
+      private static final long serialVersionUID = 1L;
+      final private String accessKey, secretKey;
+      final private Destination dest;
+      
+      public S3DownloadCallable(String accessKey, String secretKey, Destination dest)
+      {
+        this.accessKey = accessKey;
+        this.secretKey = secretKey;
+        this.dest = dest;
+      }
+      
+      /**
+       * Remote on slave variant
+       */
+      public FingerprintRecord invoke(File file, VirtualChannel channel) throws IOException, InterruptedException
+      {
+        GetObjectRequest req = new GetObjectRequest(dest.bucketName, dest.objectName);
+        ObjectMetadata md = getClient().getObject(req, file);
+
+        return new FingerprintRecord(true, null, dest.bucketName, file.getName(), md.getETag());
+       }
+      
+      private AmazonS3Client getClient()
+      {
+        return new AmazonS3Client(new BasicAWSCredentials(accessKey, secretKey));
+      }
+    }
+
+    public int downloadAll(Run build, String name, String filter, FilePath targetDir) throws IOException, InterruptedException {
+      String buildName = build.getDisplayName();
+      int buildID = build.getNumber();
+      Destination dest = new Destination(name,"jobs/" + buildName + "/" + buildID + "/" + name);
+      targetDir.mkdirs();
+      return targetDir.act(new S3DownloadDirCallable(accessKey, secretKey, filter, dest));
+    }
+
+    public static class S3DownloadDirCallable implements FileCallable<Integer> 
+    {
+      private static final long serialVersionUID = 1L;
+      final private String accessKey, secretKey;
+      final private Destination dest;
+      final private String filter;
+      
+      public S3DownloadDirCallable(String accessKey, String secretKey, String filter, Destination dest)
+      {
+        this.accessKey = accessKey;
+        this.secretKey = secretKey;
+        this.filter = filter;
+        this.dest = dest;
+      }
+      
+      /**
+       * Remote on slave variant
+       */
+      public Integer invoke(File file, VirtualChannel channel) throws IOException, InterruptedException
+      {
+        AmazonS3Client s3client = getClient();        
+
+        ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+        .withBucketName(dest.bucketName)
+        .withPrefix(dest.objectName);
+        
+        int count = 0;
+        ObjectListing objectListing;
+        do {
+          objectListing = s3client.listObjects(listObjectsRequest);
+          for (S3ObjectSummary summary : objectListing.getObjectSummaries()) {
+            File dst = new File(file, new File(summary.getKey()).getName());
+            GetObjectRequest req = new GetObjectRequest(dest.bucketName, summary.getKey());
+            s3client.getObject(req, dst);
+            count++;
+          }
+          listObjectsRequest.setMarker(objectListing.getNextMarker());
+        } while (objectListing.isTruncated());        
+        return count;
+       }
+      
+      private AmazonS3Client getClient()
+      {
+        return new AmazonS3Client(new BasicAWSCredentials(accessKey, secretKey));
+      }
+    }
+
+    public List<String> list(Run build, String bucket, String expandedFilter) {
+      AmazonS3Client s3client = getClient();        
+
+      String buildName = build.getDisplayName();
+      int buildID = build.getNumber();
+      Destination dest = new Destination(bucket, "jobs/" + buildName + "/" + buildID + "/" + name);
+
+      ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
+      .withBucketName(dest.bucketName)
+      .withPrefix(dest.objectName);
+
+      List<String> files = Lists.newArrayList();
+      
+      ObjectListing objectListing;
+      do {
+        objectListing = s3client.listObjects(listObjectsRequest);
+        for (S3ObjectSummary summary : objectListing.getObjectSummaries()) {
+          GetObjectRequest req = new GetObjectRequest(dest.bucketName, summary.getKey());
+          files.add(req.getKey());
+        }
+        listObjectsRequest.setMarker(objectListing.getNextMarker());
+      } while (objectListing.isTruncated());        
+      return files;
+    }
+
+    public List<FingerprintRecord> downloadAll(Run build, List<FingerprintRecord> artifacts, String expandedFilter, FilePath targetDir, boolean flatten) {
+        String projectName = build.getParent().getName();
+        int buildID = build.getNumber();
+
+        List<FingerprintRecord> fingerprints = Lists.newArrayList();
+        for(FingerprintRecord record : artifacts) {
+            S3Artifact artifact = record.artifact;
+            Destination dest = new Destination(artifact.getBucket(), "jobs/" + projectName + "/" + buildID + "/" + artifact.getName());
+            FilePath target = new FilePath(targetDir, artifact.getName());
+            try {
+                fingerprints.add(target.act(new S3DownloadCallable(accessKey, secretKey, dest)));
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        return fingerprints;
+    }
 }

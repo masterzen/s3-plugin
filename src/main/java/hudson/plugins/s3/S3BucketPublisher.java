@@ -69,17 +69,21 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
     }
 
     public S3Profile getProfile() {
-        S3Profile[] profiles = DESCRIPTOR.getProfiles();
+        return getProfile(profileName);
+    }
 
-        if (profileName == null && profiles.length > 0)
-            // default
-            return profiles[0];
+    public static S3Profile getProfile(String profileName) {
+      S3Profile[] profiles = DESCRIPTOR.getProfiles();
 
-        for (S3Profile profile : profiles) {
-            if (profile.getName().equals(profileName))
-                return profile;
-        }
-        return null;
+      if (profileName == null && profiles.length > 0)
+          // default
+          return profiles[0];
+
+      for (S3Profile profile : profiles) {
+          if (profile.getName().equals(profileName))
+              return profile;
+      }
+      return null;
     }
 
     public String getName() {
