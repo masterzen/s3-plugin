@@ -4,22 +4,32 @@ import hudson.FilePath;
 import hudson.FilePath.FileCallable;
 import hudson.model.BuildListener;
 import hudson.model.AbstractBuild;
+import hudson.model.Fingerprint;
+import hudson.model.FingerprintMap;
+import hudson.model.Run;
 import hudson.remoting.VirtualChannel;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
+import java.net.URL;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
+import jenkins.model.Jenkins;
 
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ListObjectsRequest;
+import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.ProgressEvent;
-import com.amazonaws.services.s3.model.ProgressListener;
-import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.PutObjectResult;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.google.common.collect.Lists;
 
 public class S3Profile {
     private String name;
@@ -75,7 +85,7 @@ public class S3Profile {
     
     
    
-    public void upload(AbstractBuild<?,?> build, final BuildListener listener, String bucketName, FilePath filePath, boolean uploadFromSlave) throws IOException, InterruptedException {
+    public FingerprintRecord upload(AbstractBuild<?,?> build, final BuildListener listener, String bucketName, FilePath filePath, boolean uploadFromSlave) throws IOException, InterruptedException {
         if (filePath.isDirectory()) {
             throw new IOException(filePath + " is a directory");
         }
@@ -83,12 +93,13 @@ public class S3Profile {
         String buildName = build.getWorkspace().getName();
         int buildID = build.getNumber();
         Destination dest = new Destination(bucketName,"jobs/" + buildName + "/" + buildID + "/" + filePath.getName());
+        boolean produced = build.getTimeInMillis() <= filePath.lastModified()+2000;
         try {
-          S3UploadCallable callable = new S3UploadCallable(accessKey, secretKey, dest);
+          S3UploadCallable callable = new S3UploadCallable(produced, accessKey, secretKey, dest);
           if (uploadFromSlave) {
-            filePath.act(callable);
+            return filePath.act(callable);
           } else {
-            callable.invoke(filePath);
+            return callable.invoke(filePath);
           }
         } catch (Exception e) {
             listener.getLogger().println("error: " + e.getMessage());
@@ -96,39 +107,43 @@ public class S3Profile {
             throw new IOException("put " + dest + ": " + e);
         }
     }
-    
-    public static class S3UploadCallable implements FileCallable<Void> 
+
+    public static class S3UploadCallable implements FileCallable<FingerprintRecord> 
     {
       private static final long serialVersionUID = 1L;
-      private String accessKey, secretKey;
-      private Destination dest;
+      final private String accessKey, secretKey;
+      final private Destination dest;
+      final private boolean produced;
       
-      public S3UploadCallable(String accessKey, String secretKey, Destination dest)
+      public S3UploadCallable(boolean produced, String accessKey, String secretKey, Destination dest)
       {
         this.accessKey = accessKey;
         this.secretKey = secretKey;
         this.dest = dest;
+        this.produced = produced;
       }
       
       /**
        * Remote on slave variant
        */
-      public Void invoke(File file, VirtualChannel channel) throws IOException, InterruptedException
+      public FingerprintRecord invoke(File file, VirtualChannel channel) throws IOException, InterruptedException
       {
-        getClient().putObject(dest.bucketName, dest.objectName, file);
-        return null;
+        PutObjectResult result = getClient().putObject(dest.bucketName, dest.objectName, file);
+        URL url = getClient().generatePresignedUrl(dest.bucketName, dest.objectName, new Date(System.currentTimeMillis() + 1000 * 86400 * 365));
+        return new FingerprintRecord(produced, url.toExternalForm(), dest.bucketName, file.getName(), result.getETag());
       }
       
       /**
        * Stream from slave, upload on master variant
        */
-      public Void invoke(FilePath file) throws IOException, InterruptedException
+      public FingerprintRecord invoke(FilePath file) throws IOException, InterruptedException
       {
         ObjectMetadata md = new ObjectMetadata();
         md.setContentLength(file.length());
         md.setLastModified(new Date(file.lastModified()));
-        getClient().putObject(dest.bucketName, dest.objectName, file.read(), md);
-        return null;
+        PutObjectResult result = getClient().putObject(dest.bucketName, dest.objectName, file.read(), md);
+        URL url = getClient().generatePresignedUrl(dest.bucketName, dest.objectName, new Date(System.currentTimeMillis() + 1000 * 86400 * 365));
+        return new FingerprintRecord(produced, url.toExternalForm(), dest.bucketName, file.getName(), result.getETag());
       }
 
       private AmazonS3Client getClient()

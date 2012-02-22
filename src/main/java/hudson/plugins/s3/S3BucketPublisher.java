@@ -4,29 +4,43 @@ import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Util;
+import hudson.matrix.MatrixProject;
 import hudson.model.*;
+import hudson.model.listeners.ItemListener;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
+import hudson.tasks.Builder;
+import hudson.tasks.Messages;
 import hudson.tasks.Publisher;
 import hudson.tasks.Recorder;
+import hudson.tasks.Fingerprinter.FingerprintAction;
 import hudson.util.CopyOnWriteList;
+import hudson.util.DescribableList;
 import hudson.util.FormValidation;
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 
+import com.google.common.collect.Lists;
+
 import javax.servlet.ServletException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import jenkins.model.Jenkins;
+
 public final class S3BucketPublisher extends Recorder implements Describable<Publisher> {
 
+    private static final Logger log = Logger.getLogger(S3BucketPublisher.class.getName());
+  
     private String profileName;
     @Extension
     public static final DescriptorImpl DESCRIPTOR = new DescriptorImpl();
@@ -100,7 +114,9 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
         log(listener.getLogger(), "Using S3 profile: " + profile.getName());
         try {
             Map<String, String> envVars = build.getEnvironment(listener);
-
+            Map<String,String> record = new HashMap<String,String>();
+            List<FingerprintRecord> artifacts = Lists.newArrayList();
+            
             for (Entry entry : entries) {
                 String expanded = Util.replaceMacro(entry.sourceFile, envVars);
                 FilePath ws = build.getWorkspace();
@@ -113,12 +129,28 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
                     if (error != null)
                         log(listener.getLogger(), error);
                 }
+                
+                List<FingerprintRecord> records = new ArrayList<FingerprintRecord>();
                 String bucket = Util.replaceMacro(entry.bucket, envVars);
                 for (FilePath src : paths) {
                     log(listener.getLogger(), "bucket=" + bucket + ", file=" + src.getName() + ", upload from slave=" + entry.uploadFromSlave);
-                    profile.upload(build, listener, bucket, src, entry.uploadFromSlave);
+                    records.add(profile.upload(build, listener, bucket, src, entry.uploadFromSlave));
                 }
+
+                artifacts.addAll(records);
+                
+                for (FingerprintRecord r : records) {
+                  Fingerprint fp = r.addRecord(build);
+                  if(fp==null) {
+                      listener.error("Fingerprinting failed for "+r.getName());
+                      continue;
+                  }
+                  fp.add(build);
+                  record.put(r.getName(),fp.getHashString());
+              }
             }
+            build.getActions().add(new S3ArtifactsAction(build, profile, artifacts ));
+            build.getActions().add(new FingerprintAction(build,record));
         } catch (IOException e) {
             e.printStackTrace(listener.error("Failed to upload files"));
             build.setResult(Result.UNSTABLE);
