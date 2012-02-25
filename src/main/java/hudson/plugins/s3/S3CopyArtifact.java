@@ -58,6 +58,7 @@ import hudson.plugins.copyartifact.BuildFilter;
 import hudson.plugins.copyartifact.BuildSelector;
 import hudson.plugins.copyartifact.Messages;
 import hudson.plugins.copyartifact.ParametersBuildFilter;
+import hudson.plugins.copyartifact.WorkspaceSelector;
 import hudson.security.AccessControlled;
 import hudson.security.SecurityRealm;
 import hudson.tasks.BuildStepDescriptor;
@@ -65,12 +66,14 @@ import hudson.tasks.Builder;
 import hudson.tasks.Fingerprinter.FingerprintAction;
 import hudson.util.DescribableList;
 import hudson.util.FormValidation;
+import hudson.util.Memoizer;
 import hudson.util.XStream2;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -316,7 +319,10 @@ public class S3CopyArtifact extends Builder {
         }
 
         public DescriptorExtensionList<BuildSelector,Descriptor<BuildSelector>> getBuildSelectors() {
-            return Hudson.getInstance().<BuildSelector,Descriptor<BuildSelector>>getDescriptorList(BuildSelector.class);
+            final DescriptorExtensionList<BuildSelector, Descriptor<BuildSelector>> list = DescriptorExtensionList.createDescriptorList(Jenkins.getInstance(), BuildSelector.class);
+            // remove from list some of the CopyArchiver build selector that we can't deal with
+            list.remove(WorkspaceSelector.DESCRIPTOR);
+            return list;
         }
     }
 
