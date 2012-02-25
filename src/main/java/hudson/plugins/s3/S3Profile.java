@@ -12,6 +12,7 @@ import hudson.plugins.s3.callable.S3UploadCallable;
 import hudson.remoting.VirtualChannel;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Date;
@@ -20,6 +21,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import jenkins.model.Jenkins;
 
+import org.apache.tools.ant.types.selectors.FileSelector;
+import org.apache.tools.ant.types.selectors.FilenameSelector;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import com.amazonaws.auth.BasicAWSCredentials;
@@ -141,23 +144,36 @@ public class S3Profile {
       return files;
     }
 
+    /**
+     * Download all artifacts from a given build
+     * @param build
+     * @param artifacts
+     * @param expandedFilter
+     * @param targetDir
+     * @param flatten
+     * @return
+     */
     public List<FingerprintRecord> downloadAll(Run build, List<FingerprintRecord> artifacts, String expandedFilter, FilePath targetDir, boolean flatten) {
-        String projectName = build.getParent().getName();
-        int buildID = build.getNumber();
 
+        FilenameSelector selector = new FilenameSelector();
+        selector.setName(expandedFilter);
+        
         List<FingerprintRecord> fingerprints = Lists.newArrayList();
         for(FingerprintRecord record : artifacts) {
             S3Artifact artifact = record.artifact;
-            Destination dest = new Destination(artifact.getBucket(), "jobs/" + projectName + "/" + buildID + "/" + artifact.getName());
-            FilePath target = new FilePath(targetDir, artifact.getName());
-            try {
-                fingerprints.add(target.act(new S3DownloadCallable(accessKey, secretKey, dest)));
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            if (selector.isSelected(new File("/"), artifact.getName(), null)) {
+                Destination dest = Destination.newFromRun(build, artifact);
+                FilePath target = new FilePath(targetDir, artifact.getName());
+                try {
+                    fingerprints.add(target.act(new S3DownloadCallable(accessKey, secretKey, dest)));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         }
         return fingerprints;
     }
+
 }
