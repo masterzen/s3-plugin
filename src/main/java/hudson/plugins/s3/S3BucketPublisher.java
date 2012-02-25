@@ -7,6 +7,7 @@ import hudson.Util;
 import hudson.matrix.MatrixProject;
 import hudson.model.*;
 import hudson.model.listeners.ItemListener;
+import hudson.model.listeners.RunListener;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
 import hudson.tasks.Builder;
@@ -22,12 +23,14 @@ import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 
 import javax.servlet.ServletException;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -92,6 +95,11 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
 
     public void setName(String profileName) {
         this.profileName = profileName;
+    }
+
+    @Override
+    public Collection<? extends Action> getProjectActions(AbstractProject<?, ?> project) {
+        return ImmutableList.of(new S3ArtifactsProjectAction(project));
     }
 
     protected void log(final PrintStream logger, final String message) {
