@@ -27,6 +27,7 @@ import org.kohsuke.stapler.DataBoundConstructor;
 
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.DeleteObjectRequest;
 import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ListObjectsRequest;
@@ -174,6 +175,17 @@ public class S3Profile {
             }
         }
         return fingerprints;
+    }
+
+    /**
+     * Delete some artifacts of a given run
+     * @param build
+     * @param artifact
+     */
+    public void delete(Run build, FingerprintRecord record) {
+        Destination dest = Destination.newFromRun(build, record.artifact);
+        DeleteObjectRequest req = new DeleteObjectRequest(dest.bucketName, dest.objectName);
+        getClient().deleteObject(req);
     }
 
 }

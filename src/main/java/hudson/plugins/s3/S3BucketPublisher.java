@@ -166,6 +166,22 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
         return BuildStepMonitor.STEP;
     }
 
+    // Listen for project renames and update property here if needed.
+    @Extension
+    public static final class S3DeletedJobListener extends RunListener<Run> {
+        @Override
+        public void onDeleted(Run run) {
+            S3ArtifactsAction artifacts = run.getAction(S3ArtifactsAction.class);
+            if (artifacts != null) {
+                S3Profile profile = S3BucketPublisher.getProfile(artifacts.getProfile());
+                for (FingerprintRecord record : artifacts.getArtifacts()) {
+                    profile.delete(run, record);
+                } 
+            }
+        }
+    }
+    
+    
     public static final class DescriptorImpl extends BuildStepDescriptor<Publisher> {
 
         private final CopyOnWriteList<S3Profile> profiles = new CopyOnWriteList<S3Profile>();
