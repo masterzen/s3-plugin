@@ -32,8 +32,6 @@ import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ListObjectsRequest;
 import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.google.common.collect.Lists;
 
@@ -188,4 +186,9 @@ public class S3Profile {
         getClient().deleteObject(req);
     }
 
+    public String getDownloadURL(Run build, FingerprintRecord record) {
+        Destination dest = Destination.newFromRun(build, record.artifact);
+        URL url = getClient().generatePresignedUrl(dest.bucketName, dest.objectName, new Date(System.currentTimeMillis() + 4000));
+        return url.toExternalForm();
+    }
 }
