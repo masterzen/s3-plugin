@@ -12,14 +12,12 @@ import jenkins.model.Jenkins;
 public class FingerprintRecord implements Serializable {
   private static final long serialVersionUID = 1L;
   final boolean produced;
-  final String s3url;
   final String md5sum;
   final S3Artifact artifact;
 
 
-  public FingerprintRecord(boolean produced, String s3url, String bucket, String name, String md5sum) {
+  public FingerprintRecord(boolean produced, String bucket, String name, String md5sum) {
       this.produced = produced;
-      this.s3url = s3url;
       this.artifact = new S3Artifact(bucket, name);
       this.md5sum = md5sum;
   }
@@ -35,10 +33,6 @@ public class FingerprintRecord implements Serializable {
 
   public String getBucket() {
     return artifact.getBucket();
-  }
-
-  public String getS3url() {
-    return s3url;
   }
 
   public String getFingerprint() {

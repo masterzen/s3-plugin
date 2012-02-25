@@ -34,9 +34,7 @@ public class S3UploadCallable extends AbstractS3Callable implements FileCallable
     public FingerprintRecord invoke(File file, VirtualChannel channel) throws IOException, InterruptedException 
     {
         PutObjectResult result = getClient().putObject(dest.bucketName, dest.objectName, file);
-        URL url = getClient().generatePresignedUrl(dest.bucketName, dest.objectName,
-                new Date(System.currentTimeMillis() + 1000 * 86400 * 365));
-        return new FingerprintRecord(produced, url.toExternalForm(), dest.bucketName, file.getName(), result.getETag());
+        return new FingerprintRecord(produced, dest.bucketName, file.getName(), result.getETag());
     }
 
     /**
@@ -48,8 +46,6 @@ public class S3UploadCallable extends AbstractS3Callable implements FileCallable
         md.setContentLength(file.length());
         md.setLastModified(new Date(file.lastModified()));
         PutObjectResult result = getClient().putObject(dest.bucketName, dest.objectName, file.read(), md);
-        URL url = getClient().generatePresignedUrl(dest.bucketName, dest.objectName,
-                new Date(System.currentTimeMillis() + 1000 * 86400 * 365));
-        return new FingerprintRecord(produced, url.toExternalForm(), dest.bucketName, file.getName(), result.getETag());
+        return new FingerprintRecord(produced, dest.bucketName, file.getName(), result.getETag());
     }
 }
