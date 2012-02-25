@@ -92,9 +92,7 @@ public class S3Profile {
             throw new IOException(filePath + " is a directory");
         }
         
-        String buildName = build.getWorkspace().getName();
-        int buildID = build.getNumber();
-        Destination dest = new Destination(bucketName,"jobs/" + buildName + "/" + buildID + "/" + filePath.getName());
+        Destination dest = Destination.newFromBuild(build, bucketName, filePath.getName());
         boolean produced = build.getTimeInMillis() <= filePath.lastModified()+2000;
         try {
           S3UploadCallable callable = new S3UploadCallable(produced, accessKey, secretKey, dest);
