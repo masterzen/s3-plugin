@@ -1,5 +1,8 @@
 package hudson.plugins.s3;
 
+import java.util.Arrays;
+import java.util.Comparator;
+
 import com.amazonaws.regions.Regions;
 
 public final class Entry {
@@ -23,7 +26,8 @@ public final class Entry {
     /**
      * Regions Values
      */
-    public static final Regions[] regions = Regions.values();
+    public static final Regions[] regions;
+    
     /**
      * Stores the Region Value
      */
@@ -32,17 +36,19 @@ public final class Entry {
     /**
      * Do not publish the artifacts when build fails
      */
-    public boolean noUploadOnFailure;
+    public Boolean noUploadOnFailure = true;
+    //public boolean noUploadOnFailure = !uploadOnFailure;
 
     /**
      * Upload either from the slave or the master
      */
-    public boolean uploadFromSlave;
+    public boolean uploadFromSlave = true;
 
     /**
      * Let Jenkins manage the S3 uploaded artifacts
      */
-    public boolean managedArtifacts;
+    public Boolean managedArtifacts = true;
+    //public boolean managedArtifacts = !unManagedArtifacts;
     
     /**
      * Use S3 server side encryption when uploading the artifacts
@@ -52,5 +58,33 @@ public final class Entry {
     /**
      * Flatten directories
      */
-    public boolean flatten;
+    public Boolean flatten = true;
+    
+    static {
+      regions = Regions.values().clone();
+      Arrays.sort(regions, new Comparator() {
+
+        public int compare(Object o1, Object o2)
+        {
+          if (o1 instanceof Regions && o2 instanceof Regions) {
+            return o1 == Regions.US_EAST_1 ? -1 : 0;
+          }
+          return 0;
+        }
+      });
+    }
+    
+    // Backwards compatibility for older builds
+    public Object readResolve() {
+        if (noUploadOnFailure == null) {
+            this.noUploadOnFailure = Boolean.TRUE;
+        }
+        if (managedArtifacts == null) {
+          this.managedArtifacts = Boolean.TRUE;
+        }
+        if (flatten == null) {
+          this.flatten = Boolean.TRUE;
+        }
+        return this;
+    }
 }
