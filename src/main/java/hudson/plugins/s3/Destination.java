@@ -4,6 +4,8 @@ import hudson.model.AbstractBuild;
 import hudson.model.Run;
 
 import java.io.Serializable;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 /**
@@ -16,11 +18,17 @@ import java.io.Serializable;
  * 
  */
 public class Destination implements Serializable {
-  private static final long serialVersionUID = 1L;
-  public final String bucketName; 
-  public final String objectName; 
+  private static final long serialVersionUID = 2L;
+  private final String bucketName; 
+  private final String objectName; 
+  private String projectName;
+  private String buildNumber;
   
   public Destination(final String userBucketName, final String fileName) {
+    this(userBucketName, fileName, "", null);
+  }
+
+  public Destination(final String userBucketName, final String fileName, final String projectName, final String buildNumber) {
     
     if (userBucketName == null || fileName == null) 
       throw new IllegalArgumentException("Not defined for null parameters: "+userBucketName+","+fileName);
@@ -34,19 +42,51 @@ public class Destination implements Serializable {
     } else {
         objectName = fileName;
     }
+    this.projectName = projectName;
+    this.buildNumber = buildNumber;
   }
 
-@Override
- public String toString() {
-   return "Destination [bucketName="+bucketName+", objectName="+objectName+"]";
- }
+  public String getBucketName() {
+    return bucketName;
+  }
+
+  public String getObjectName() {
+    return buildNumber != null ? "jobs/" + projectName + "/" + buildNumber + "/" + objectName : objectName;
+  }
+  
+  public String getRelativeName() {
+    return objectName;
+  }
+
+  // Backwards compatibility for older builds
+  public Object readResolve() {
+      if (projectName == null || buildNumber == null) {
+        // try to fix
+        Pattern p = Pattern.compile("^jobs/(.*?)/(\\d+)/(.*)$");
+        Matcher m = p.matcher(objectName);
+        if (m.matches()) {
+          String fileName = m.group(2);
+          String project = m.group(1);
+          String build = m.group(3);
+          return new Destination(bucketName, fileName, project, build);
+        } else {
+          return this;
+        }
+      }
+      return this;
+  }
+  
+   @Override
+   public String toString() {
+     return "Destination [bucketName="+bucketName+", objectName="+objectName+"]";
+   }
   
 
   public static Destination newFromRun(Run run, String bucketName, String fileName)
   {
-    String projectName = run.getParent().getName();
+    String projectName = run.getParent().getFullName();
     int buildID = run.getNumber();
-    return new Destination(bucketName, "jobs/" + projectName + "/" + buildID + "/" + fileName);
+    return new Destination(bucketName, fileName, projectName, String.valueOf(buildID));
   }
 
   public static Destination newFromRun(Run run, S3Artifact artifact) 
@@ -56,8 +96,8 @@ public class Destination implements Serializable {
     
   public static Destination newFromBuild(AbstractBuild<?, ?> build, String bucketName, String fileName)
   {
-    String projectName = build.getParent().getName();
+    String projectName = build.getParent().getFullName();
     int buildID =build.getNumber();
-    return new Destination(bucketName, "jobs/" + projectName + "/" + buildID + "/" + fileName);
+    return new Destination(bucketName, fileName, projectName, String.valueOf(buildID));
   }
 }

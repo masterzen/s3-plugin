@@ -130,7 +130,7 @@ public class S3Profile {
         Destination dest = new Destination(bucketName, fileName);
         boolean produced = false;
         if (managedArtifacts) {
-            dest = Destination.newFromBuild(build, bucketName, filePath.getName());
+            dest = Destination.newFromBuild(build, bucketName, fileName);
             produced = build.getTimeInMillis() <= filePath.lastModified()+2000;
         }
 
@@ -151,11 +151,11 @@ public class S3Profile {
 
         String buildName = build.getDisplayName();
         int buildID = build.getNumber();
-        Destination dest = new Destination(bucket, "jobs/" + buildName + "/" + buildID + "/" + name);
+        Destination dest = new Destination(bucket, name, buildName, String.valueOf(buildID));
 
         ListObjectsRequest listObjectsRequest = new ListObjectsRequest()
-        .withBucketName(dest.bucketName)
-        .withPrefix(dest.objectName);
+        .withBucketName(dest.getBucketName())
+        .withPrefix(dest.getObjectName());
 
         List<String> files = Lists.newArrayList();
         
@@ -163,7 +163,7 @@ public class S3Profile {
         do {
           objectListing = s3client.listObjects(listObjectsRequest);
           for (S3ObjectSummary summary : objectListing.getObjectSummaries()) {
-            GetObjectRequest req = new GetObjectRequest(dest.bucketName, summary.getKey());
+            GetObjectRequest req = new GetObjectRequest(dest.getBucketName(), summary.getKey());
             files.add(req.getKey());
           }
           listObjectsRequest.setMarker(objectListing.getNextMarker());
@@ -204,18 +204,18 @@ public class S3Profile {
        */
       public void delete(Run build, FingerprintRecord record) {
           Destination dest = Destination.newFromRun(build, record.artifact);
-          DeleteObjectRequest req = new DeleteObjectRequest(dest.bucketName, dest.objectName);
+          DeleteObjectRequest req = new DeleteObjectRequest(dest.getBucketName(), dest.getObjectName());
           getClient().deleteObject(req);
       }
 
       public String getDownloadURL(Run build, FingerprintRecord record) {
           Destination dest = Destination.newFromRun(build, record.artifact);
-          GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(dest.bucketName, dest.objectName);
-          request.setExpiration(new Date(System.currentTimeMillis() + 4000));
+          GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(dest.getBucketName(), dest.getObjectName());
+          request.setExpiration(new Date(System.currentTimeMillis() + 60000));
           ResponseHeaderOverrides headers = new ResponseHeaderOverrides();
           // let the browser use the last part of the name, not the full path
           // when saving.
-          String fileName = (new File(dest.objectName)).getName().trim(); 
+          String fileName = (new File(dest.getRelativeName())).getName().trim(); 
           headers.setContentDisposition("attachment; filename=\"" + fileName + "\"");
           request.setResponseHeaders(headers);
           URL url = getClient().generatePresignedUrl(request);

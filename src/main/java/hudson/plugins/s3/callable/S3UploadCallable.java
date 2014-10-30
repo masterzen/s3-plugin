@@ -6,6 +6,7 @@ import hudson.plugins.s3.Destination;
 import hudson.plugins.s3.FingerprintRecord;
 import hudson.plugins.s3.MetadataPair;
 import hudson.remoting.VirtualChannel;
+import hudson.util.IOUtils;
 import hudson.util.Secret;
 
 import java.io.File;
@@ -18,6 +19,7 @@ import com.amazonaws.regions.RegionUtils;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.internal.Mimetypes;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.PutObjectResult;
 
 public class S3UploadCallable extends AbstractS3Callable implements FileCallable<FingerprintRecord> {
@@ -70,8 +72,25 @@ public class S3UploadCallable extends AbstractS3Callable implements FileCallable
      */
     public FingerprintRecord invoke(FilePath file) throws IOException, InterruptedException {
         setRegion();
-        PutObjectResult result = getClient().putObject(dest.bucketName, dest.objectName, file.read(), buildMetadata(file));
-        return new FingerprintRecord(produced, dest.bucketName, file.getName(), result.getETag());
+        File tempFile = null, localFile;
+        try {
+          if (file.isRemote()) {
+            tempFile = File.createTempFile("s3plugin", "");
+            IOUtils.copy(file.read(), tempFile);
+            localFile = tempFile;
+          } else {
+            localFile = new File(file.getRemote());
+          }
+  
+          PutObjectRequest putObject = new PutObjectRequest(dest.getBucketName(), dest.getObjectName(), localFile).withMetadata(buildMetadata(file));
+          PutObjectResult result = getClient().putObject(putObject);
+          return new FingerprintRecord(produced, dest.getBucketName(), dest.getRelativeName(), result.getETag());
+        } finally {
+            if (tempFile != null)
+            {
+                tempFile.delete();
+            }
+        }
     }
 
     private void setRegion() {
