@@ -235,10 +235,12 @@ public class S3CopyArtifact extends Builder {
                 FingerprintMap map = Jenkins.getInstance().getFingerprintMap();
                 
                 Fingerprint f = map.getOrCreate(src, record.getName(), record.getFingerprint());
-                if (src!=null) {
-                    f.add((AbstractBuild)src);
+                if (f != null) {
+                    if (src!=null) {
+                        f.add((AbstractBuild)src);
+                    }
+                    f.add(dst);
                 }
-                f.add(dst);
                 fingerprints.put(record.getName(), record.getFingerprint());
             }
 

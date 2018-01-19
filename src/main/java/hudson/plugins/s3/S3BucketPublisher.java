@@ -248,9 +248,9 @@ public final class S3BucketPublisher extends Recorder implements Describable<Pub
             load();
         }
 
-        public Regions[] regions = Entry.regions;
+        public transient Regions[] regions = Entry.regions;
 
-        public String[] storageClasses = Entry.storageClasses;
+        public transient String[] storageClasses = Entry.storageClasses;
 
         public DescriptorImpl() {
             this(S3BucketPublisher.class);

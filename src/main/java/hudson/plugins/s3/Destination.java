@@ -78,7 +78,11 @@ public class Destination implements Serializable {
   
    @Override
    public String toString() {
+    if (buildNumber == null) {
      return "Destination [bucketName="+bucketName+", objectName="+objectName+"]";
+    } else {
+     return "Managed Destination [bucketName="+bucketName+", objectName="+objectName+", projectName="+projectName+", buildNumber="+buildNumber+"]";
+    }
    }
   
 

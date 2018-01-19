@@ -85,6 +85,9 @@ public final class Entry {
         if (flatten == null) {
           this.flatten = Boolean.TRUE;
         }
+        if (selectedRegion == null) {
+          this.selectedRegion = Regions.US_EAST_1.name();
+        }
         return this;
     }
 }
